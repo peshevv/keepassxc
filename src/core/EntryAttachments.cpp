@@ -147,6 +147,8 @@ void EntryAttachments::clear()
 
     // Overwrite all open attachment files with random data and then remove them
     for (auto& path: qAsConst(m_openedAttachments)) {
+        m_attachmentFileWatcher.removePath(path);
+
         QFile f(path);
         if (f.open(QFile::ReadWrite)) {
             qint64 s = f.size();
@@ -156,7 +158,6 @@ void EntryAttachments::clear()
         }
         f.close();
         f.remove();
-        m_attachmentFileWatcher.removePath(path);
     }
     m_openedAttachments.clear();
 
