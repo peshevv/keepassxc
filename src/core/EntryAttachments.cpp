@@ -197,12 +197,13 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
 {
 
     const QByteArray attachmentData = value(key);
+    auto ext = key.contains(".") ? key.split(".").last() : "";
 
 #ifdef KEEPASSXC_DIST_SNAP
     const QString tmpFileTemplate =
-        QString("%1/XXXXXX.%2").arg(QProcessEnvironment::systemEnvironment().value("SNAP_USER_DATA"), key);
+        QString("%1/XXXXXXXXXXXX.%2").arg(QProcessEnvironment::systemEnvironment().value("SNAP_USER_DATA"), ext);
 #else
-    const QString tmpFileTemplate = QDir::temp().absoluteFilePath(QString("XXXXXX.").append(key));
+    const QString tmpFileTemplate = QDir::temp().absoluteFilePath(QString("XXXXXXXXXXXX.").append(ext));
 #endif
 
     QTemporaryFile tmpFile(tmpFileTemplate);
