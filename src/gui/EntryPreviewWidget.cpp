@@ -94,6 +94,14 @@ EntryPreviewWidget::~EntryPreviewWidget()
 {
 }
 
+void EntryPreviewWidget::clear()
+{
+    hide();
+    m_currentEntry = nullptr;
+    m_currentGroup = nullptr;
+    m_ui->entryAttachmentsWidget->clearAttachments();
+}
+
 void EntryPreviewWidget::setEntry(Entry* selectedEntry)
 {
     if (!selectedEntry) {

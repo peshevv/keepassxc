@@ -156,6 +156,7 @@ void EntryAttachments::clear()
         }
         f.close();
         f.remove();
+        m_attachmentFileWatcher.removePath(path);
     }
 
     emit reset();
