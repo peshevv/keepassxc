@@ -60,6 +60,7 @@ signals:
 
 private:
     QHash<QString, QByteArray> m_attachments;
+    QHash<QString, QString> m_openedAttachments;
     QFileSystemWatcher m_attachmentFileWatcher;
 };
 
