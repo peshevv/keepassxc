@@ -99,7 +99,7 @@ void EntryPreviewWidget::clear()
     hide();
     m_currentEntry = nullptr;
     m_currentGroup = nullptr;
-    m_ui->entryAttachmentsWidget->clearAttachments();
+    m_ui->entryAttachmentsWidget->unlinkAttachments();
 }
 
 void EntryPreviewWidget::setEntry(Entry* selectedEntry)
@@ -347,7 +347,7 @@ void EntryPreviewWidget::updateEntryAdvancedTab()
     m_ui->entryAttributesTable->horizontalHeader()->setStretchLastSection(true);
     m_ui->entryAttributesTable->resizeColumnsToContents();
     m_ui->entryAttributesTable->resizeRowsToContents();
-    m_ui->entryAttachmentsWidget->setEntryAttachments(m_currentEntry->attachments());
+    m_ui->entryAttachmentsWidget->linkAttachments(m_currentEntry->attachments());
 }
 
 void EntryPreviewWidget::updateEntryAutotypeTab()

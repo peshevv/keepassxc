@@ -17,7 +17,7 @@
 EntryAttachmentsWidget::EntryAttachmentsWidget(QWidget* parent)
     : QWidget(parent)
     , m_ui(new Ui::EntryAttachmentsWidget)
-    , m_entryAttachments(new EntryAttachments(this))
+    , m_entryAttachments(nullptr)
     , m_attachmentsModel(new EntryAttachmentsModel(this))
     , m_readOnly(false)
     , m_buttonsVisible(true)
@@ -28,7 +28,6 @@ EntryAttachmentsWidget::EntryAttachmentsWidget(QWidget* parent)
     m_ui->attachmentsView->viewport()->setAcceptDrops(true);
     m_ui->attachmentsView->viewport()->installEventFilter(this);
 
-    m_attachmentsModel->setEntryAttachments(m_entryAttachments);
     m_ui->attachmentsView->setModel(m_attachmentsModel);
     m_ui->attachmentsView->verticalHeader()->hide();
     m_ui->attachmentsView->horizontalHeader()->setStretchLastSection(true);
@@ -62,7 +61,7 @@ EntryAttachmentsWidget::~EntryAttachmentsWidget()
 {
 }
 
-const EntryAttachments* EntryAttachmentsWidget::entryAttachments() const
+const EntryAttachments* EntryAttachmentsWidget::attachments() const
 {
     return m_entryAttachments;
 }
@@ -77,15 +76,16 @@ bool EntryAttachmentsWidget::isButtonsVisible() const
     return m_buttonsVisible;
 }
 
-void EntryAttachmentsWidget::setEntryAttachments(const EntryAttachments* attachments)
+void EntryAttachmentsWidget::linkAttachments(EntryAttachments* attachments)
 {
-    Q_ASSERT(attachments != nullptr);
-    m_entryAttachments->copyDataFrom(attachments);
+    m_entryAttachments = attachments;
+    m_attachmentsModel->setEntryAttachments(m_entryAttachments);
 }
 
-void EntryAttachmentsWidget::clearAttachments()
+void EntryAttachmentsWidget::unlinkAttachments()
 {
-    m_entryAttachments->clear();
+    m_entryAttachments = nullptr;
+    m_attachmentsModel->setEntryAttachments(nullptr);
 }
 
 void EntryAttachmentsWidget::setReadOnly(bool readOnly)
@@ -108,25 +108,9 @@ void EntryAttachmentsWidget::setButtonsVisible(bool buttonsVisible)
     emit buttonsVisibleChanged(m_buttonsVisible);
 }
 
-QByteArray EntryAttachmentsWidget::getAttachment(const QString& name)
-{
-    return m_entryAttachments->value(name);
-}
-
-void EntryAttachmentsWidget::setAttachment(const QString& name, const QByteArray& value)
-{
-    m_entryAttachments->set(name, value);
-}
-
-void EntryAttachmentsWidget::removeAttachment(const QString& name)
-{
-    if (!isReadOnly() && m_entryAttachments->hasKey(name)) {
-        m_entryAttachments->remove(name);
-    }
-}
-
 void EntryAttachmentsWidget::insertAttachments()
 {
+    Q_ASSERT(m_entryAttachments);
     Q_ASSERT(!isReadOnly());
     if (isReadOnly()) {
         return;
@@ -156,6 +140,7 @@ void EntryAttachmentsWidget::insertAttachments()
 
 void EntryAttachmentsWidget::removeSelectedAttachments()
 {
+    Q_ASSERT(m_entryAttachments);
     Q_ASSERT(!isReadOnly());
     if (isReadOnly()) {
         return;
@@ -184,11 +169,14 @@ void EntryAttachmentsWidget::removeSelectedAttachments()
 
 void EntryAttachmentsWidget::renameSelectedAttachments()
 {
+    Q_ASSERT(m_entryAttachments);
     m_ui->attachmentsView->edit(m_ui->attachmentsView->selectionModel()->selectedIndexes().first());
 }
 
 void EntryAttachmentsWidget::saveSelectedAttachments()
 {
+    Q_ASSERT(m_entryAttachments);
+
     const QModelIndexList indexes = m_ui->attachmentsView->selectionModel()->selectedRows(0);
     if (indexes.isEmpty()) {
         return;
