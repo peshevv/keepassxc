@@ -209,7 +209,11 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
 
     QTemporaryFile tmpFile(tmpFileTemplate);
 
-    const bool saveOk = tmpFile.open() && tmpFile.write(attachmentData) == attachmentData.size() && tmpFile.flush();
+    const bool saveOk = tmpFile.open()
+        && tmpFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner)
+        && tmpFile.write(attachmentData) == attachmentData.size()
+        && tmpFile.flush();
+
     if (!saveOk && errorMessage) {
         *errorMessage = tr("%1 - %2").arg(key, tmpFile.errorString());
         return false;
