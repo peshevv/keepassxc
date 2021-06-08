@@ -20,6 +20,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QFileSystemWatcher>
 
 #include "core/ModifiableObject.h"
 
@@ -31,6 +32,7 @@ class EntryAttachments : public ModifiableObject
 
 public:
     explicit EntryAttachments(QObject* parent = nullptr);
+    ~EntryAttachments();
     QList<QString> keys() const;
     bool hasKey(const QString& key) const;
     QSet<QByteArray> values() const;
@@ -58,6 +60,7 @@ signals:
 
 private:
     QHash<QString, QByteArray> m_attachments;
+    QFileSystemWatcher m_attachmentFileWatcher;
 };
 
 #endif // KEEPASSX_ENTRYATTACHMENTS_H

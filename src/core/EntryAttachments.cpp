@@ -18,6 +18,7 @@
 #include "EntryAttachments.h"
 
 #include "core/Global.h"
+#include "crypto/Random.h"
 
 #include <QDesktopServices>
 #include <QDir>
@@ -30,6 +31,11 @@
 EntryAttachments::EntryAttachments(QObject* parent)
     : ModifiableObject(parent)
 {
+}
+
+EntryAttachments::~EntryAttachments()
+{
+    clear();
 }
 
 QList<QString> EntryAttachments::keys() const
@@ -139,6 +145,19 @@ void EntryAttachments::clear()
 
     m_attachments.clear();
 
+    // Overwrite all open attachment files with random data and then remove them
+    for (auto& path : m_attachmentFileWatcher.files()) {
+        QFile f(path);
+        if (f.open(QFile::ReadWrite)) {
+            qint64 s = f.size();
+            for (qint64 i = 0; i < (s / 128 + 1); ++i) {
+                f.write(randomGen()->randomArray(128));
+            }
+        }
+        f.close();
+        f.remove();
+    }
+
     emit reset();
     emitModified();
 }
@@ -179,7 +198,6 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
 
     const QByteArray attachmentData = value(key);
 
-    // tmp file will be removed once the database (or the application) has been closed
 #ifdef KEEPASSXC_DIST_SNAP
     const QString tmpFileTemplate =
         QString("%1/XXXXXX.%2").arg(QProcessEnvironment::systemEnvironment().value("SNAP_USER_DATA"), key);
@@ -187,22 +205,22 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
     const QString tmpFileTemplate = QDir::temp().absoluteFilePath(QString("XXXXXX.").append(key));
 #endif
 
-    QScopedPointer<QTemporaryFile> tmpFile(new QTemporaryFile(tmpFileTemplate, this));
+    QTemporaryFile tmpFile(tmpFileTemplate);
 
-    const bool saveOk = tmpFile->open() && tmpFile->write(attachmentData) == attachmentData.size() && tmpFile->flush();
+    const bool saveOk = tmpFile.open() && tmpFile.write(attachmentData) == attachmentData.size() && tmpFile.flush();
     if (!saveOk && errorMessage) {
-        *errorMessage = QString("%1 - %2").arg(key, tmpFile->errorString());
+        *errorMessage = tr("%1 - %2").arg(key, tmpFile.errorString());
         return false;
     }
 
-    tmpFile->close();
-    const bool openOk = QDesktopServices::openUrl(QUrl::fromLocalFile(tmpFile->fileName()));
+    m_attachmentFileWatcher.addPath(tmpFile.fileName());
+    tmpFile.close();
+    tmpFile.setAutoRemove(false);
+    const bool openOk = QDesktopServices::openUrl(QUrl::fromLocalFile(tmpFile.fileName()));
     if (!openOk && errorMessage) {
-        *errorMessage = QString("Can't open file \"%1\"").arg(key);
+        *errorMessage = tr("Cannot open file \"%1\"").arg(key);
         return false;
     }
 
-    // take ownership of the tmpFile pointer
-    tmpFile.take();
     return true;
 }
