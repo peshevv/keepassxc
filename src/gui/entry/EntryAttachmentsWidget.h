@@ -54,7 +54,6 @@ private slots:
 
 private:
     bool insertAttachments(const QStringList& fileNames, QString& errorMessage);
-    bool openAttachment(const QModelIndex& index, QString& errorMessage);
 
     QStringList confirmLargeAttachments(const QStringList& filenames);
 

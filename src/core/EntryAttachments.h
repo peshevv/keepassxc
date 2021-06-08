@@ -18,7 +18,7 @@
 #ifndef KEEPASSX_ENTRYATTACHMENTS_H
 #define KEEPASSX_ENTRYATTACHMENTS_H
 
-#include <QMap>
+#include <QHash>
 #include <QObject>
 
 #include "core/ModifiableObject.h"
@@ -45,6 +45,7 @@ public:
     bool operator==(const EntryAttachments& other) const;
     bool operator!=(const EntryAttachments& other) const;
     int attachmentsSize() const;
+    bool openAttachment(const QString& key, QString* errorMessage = nullptr);
 
 signals:
     void keyModified(const QString& key);
@@ -56,7 +57,7 @@ signals:
     void reset();
 
 private:
-    QMap<QString, QByteArray> m_attachments;
+    QHash<QString, QByteArray> m_attachments;
 };
 
 #endif // KEEPASSX_ENTRYATTACHMENTS_H

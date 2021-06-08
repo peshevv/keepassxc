@@ -1,17 +1,13 @@
 #include "EntryAttachmentsWidget.h"
 #include "ui_EntryAttachmentsWidget.h"
 
-#include <QDesktopServices>
 #include <QDir>
 #include <QDropEvent>
-#include <QFile>
-#include <QFileInfo>
 #include <QMimeData>
-#include <QProcessEnvironment>
 #include <QTemporaryFile>
+#include <QStandardPaths>
 
 #include "EntryAttachmentsModel.h"
-#include "config-keepassx.h"
 #include "core/Config.h"
 #include "core/EntryAttachments.h"
 #include "core/Tools.h"
@@ -265,7 +261,7 @@ void EntryAttachmentsWidget::openAttachment(const QModelIndex& index)
     }
 
     QString errorMessage;
-    if (!openAttachment(index, errorMessage)) {
+    if (!m_entryAttachments->openAttachment(m_attachmentsModel->keyByIndex(index), &errorMessage)) {
         errorOccurred(tr("Unable to open attachment:\n%1").arg(errorMessage));
     }
 }
@@ -280,7 +276,7 @@ void EntryAttachmentsWidget::openSelectedAttachments()
     QStringList errors;
     for (const QModelIndex& index : indexes) {
         QString errorMessage;
-        if (!openAttachment(index, errorMessage)) {
+        if (!m_entryAttachments->openAttachment(m_attachmentsModel->keyByIndex(index), &errorMessage)) {
             const QString filename = m_attachmentsModel->keyByIndex(index);
             errors.append(QString("%1 - %2").arg(filename, errorMessage));
         };
@@ -334,39 +330,6 @@ bool EntryAttachmentsWidget::insertAttachments(const QStringList& filenames, QSt
     }
 
     return errors.isEmpty();
-}
-
-bool EntryAttachmentsWidget::openAttachment(const QModelIndex& index, QString& errorMessage)
-{
-    const QString filename = m_attachmentsModel->keyByIndex(index);
-    const QByteArray attachmentData = m_entryAttachments->value(filename);
-
-    // tmp file will be removed once the database (or the application) has been closed
-#ifdef KEEPASSXC_DIST_SNAP
-    const QString tmpFileTemplate =
-        QString("%1/XXXXXX.%2").arg(QProcessEnvironment::systemEnvironment().value("SNAP_USER_DATA"), filename);
-#else
-    const QString tmpFileTemplate = QDir::temp().absoluteFilePath(QString("XXXXXX.").append(filename));
-#endif
-
-    QScopedPointer<QTemporaryFile> tmpFile(new QTemporaryFile(tmpFileTemplate, this));
-
-    const bool saveOk = tmpFile->open() && tmpFile->write(attachmentData) == attachmentData.size() && tmpFile->flush();
-    if (!saveOk) {
-        errorMessage = QString("%1 - %2").arg(filename, tmpFile->errorString());
-        return false;
-    }
-
-    tmpFile->close();
-    const bool openOk = QDesktopServices::openUrl(QUrl::fromLocalFile(tmpFile->fileName()));
-    if (!openOk) {
-        errorMessage = QString("Can't open file \"%1\"").arg(filename);
-        return false;
-    }
-
-    // take ownership of the tmpFile pointer
-    tmpFile.take();
-    return true;
 }
 
 QStringList EntryAttachmentsWidget::confirmLargeAttachments(const QStringList& filenames)

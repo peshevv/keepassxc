@@ -19,8 +19,13 @@
 
 #include "core/Global.h"
 
+#include <QDesktopServices>
+#include <QDir>
+#include <QProcessEnvironment>
 #include <QSet>
+#include <QTemporaryFile>
 #include <QStringList>
+#include <QUrl>
 
 EntryAttachments::EntryAttachments(QObject* parent)
     : ModifiableObject(parent)
@@ -167,4 +172,37 @@ int EntryAttachments::attachmentsSize() const
         size += it.key().toUtf8().size() + it.value().size();
     }
     return size;
+}
+
+bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
+{
+
+    const QByteArray attachmentData = value(key);
+
+    // tmp file will be removed once the database (or the application) has been closed
+#ifdef KEEPASSXC_DIST_SNAP
+    const QString tmpFileTemplate =
+        QString("%1/XXXXXX.%2").arg(QProcessEnvironment::systemEnvironment().value("SNAP_USER_DATA"), key);
+#else
+    const QString tmpFileTemplate = QDir::temp().absoluteFilePath(QString("XXXXXX.").append(key));
+#endif
+
+    QScopedPointer<QTemporaryFile> tmpFile(new QTemporaryFile(tmpFileTemplate, this));
+
+    const bool saveOk = tmpFile->open() && tmpFile->write(attachmentData) == attachmentData.size() && tmpFile->flush();
+    if (!saveOk && errorMessage) {
+        *errorMessage = QString("%1 - %2").arg(key, tmpFile->errorString());
+        return false;
+    }
+
+    tmpFile->close();
+    const bool openOk = QDesktopServices::openUrl(QUrl::fromLocalFile(tmpFile->fileName()));
+    if (!openOk && errorMessage) {
+        *errorMessage = QString("Can't open file \"%1\"").arg(key);
+        return false;
+    }
+
+    // take ownership of the tmpFile pointer
+    tmpFile.take();
+    return true;
 }
