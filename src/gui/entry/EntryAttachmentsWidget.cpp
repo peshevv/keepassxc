@@ -4,8 +4,8 @@
 #include <QDir>
 #include <QDropEvent>
 #include <QMimeData>
-#include <QTemporaryFile>
 #include <QStandardPaths>
+#include <QTemporaryFile>
 
 #include "EntryAttachmentsModel.h"
 #include "core/Config.h"

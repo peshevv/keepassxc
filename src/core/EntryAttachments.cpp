@@ -24,15 +24,14 @@
 #include <QDir>
 #include <QProcessEnvironment>
 #include <QSet>
-#include <QTemporaryFile>
 #include <QStringList>
+#include <QTemporaryFile>
 #include <QUrl>
 
 EntryAttachments::EntryAttachments(QObject* parent)
     : ModifiableObject(parent)
 {
-    connect(&m_attachmentFileWatcher, &FileWatcher::fileChanged,
-            this, &EntryAttachments::attachmentFileModified);
+    connect(&m_attachmentFileWatcher, &FileWatcher::fileChanged, this, &EntryAttachments::attachmentFileModified);
 }
 
 EntryAttachments::~EntryAttachments()
@@ -148,7 +147,7 @@ void EntryAttachments::clear()
     m_attachments.clear();
 
     // Overwrite all open attachment files with random data and then remove them
-    for (auto& path: asConst(m_openedAttachments)) {
+    for (auto& path : asConst(m_openedAttachments)) {
         m_attachmentFileWatcher.removePath(path);
 
         QFile f(path);
@@ -214,10 +213,8 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
 
         QTemporaryFile tmpFile(tmpFileTemplate);
 
-        const bool saveOk = tmpFile.open()
-            && tmpFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner)
-            && tmpFile.write(attachmentData) == attachmentData.size()
-            && tmpFile.flush();
+        const bool saveOk = tmpFile.open() && tmpFile.setPermissions(QFile::ReadOwner | QFile::WriteOwner)
+                            && tmpFile.write(attachmentData) == attachmentData.size() && tmpFile.flush();
 
         if (!saveOk && errorMessage) {
             *errorMessage = tr("%1 - %2").arg(key, tmpFile.errorString());

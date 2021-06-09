@@ -135,7 +135,7 @@ private:
     bool shouldIgnoreChanges() const
     {
         return m_filePath.isEmpty() || m_ignoreFileChange || m_fileIgnoreDelayTimer.isActive()
-            || m_fileChangeDelayTimer.isActive();
+               || m_fileChangeDelayTimer.isActive();
     }
 
     QString m_filePath;
@@ -146,7 +146,6 @@ private:
     int m_fileChecksumSizeBytes = -1;
     bool m_ignoreFileChange = false;
 };
-
 
 FileWatcher::FileWatcher(QObject* parent)
     : QObject(parent)
