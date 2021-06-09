@@ -162,7 +162,7 @@ bool Database::open(const QString& filePath, QSharedPointer<const CompositeKey> 
     markAsClean();
 
     emit databaseOpened();
-    m_fileWatcher->start(canonicalFilePath(), 30, 1);
+    m_fileWatcher->addPath(canonicalFilePath(), 30, 1);
     setEmitModified(true);
 
     return true;
@@ -250,7 +250,7 @@ bool Database::saveAs(const QString& filePath, QString* error, bool atomic, bool
 
         // Fail-safe check to make sure we don't overwrite underlying file changes
         // that have not yet triggered a file reload/merge operation.
-        if (!m_fileWatcher->hasSameFileChecksum()) {
+        if (!m_fileWatcher->hasSameFileChecksum(m_data.filePath)) {
             if (error) {
                 *error = tr("Database file has unmerged changes.");
             }
@@ -260,7 +260,7 @@ bool Database::saveAs(const QString& filePath, QString* error, bool atomic, bool
 
     // Clear read-only flag
     setReadOnly(false);
-    m_fileWatcher->stop();
+    m_fileWatcher->removePath(m_data.filePath);
 
     QFileInfo fileInfo(filePath);
     auto realFilePath = fileInfo.exists() ? fileInfo.canonicalFilePath() : fileInfo.absoluteFilePath();
@@ -272,7 +272,7 @@ bool Database::saveAs(const QString& filePath, QString* error, bool atomic, bool
         if (isNewFile) {
             QFile::setPermissions(realFilePath, QFile::ReadUser | QFile::WriteUser);
         }
-        m_fileWatcher->start(realFilePath, 30, 1);
+        m_fileWatcher->addPath(realFilePath, 30, 1);
     } else {
         // Saving failed, don't rewatch file since it does not represent our database
         markAsModified();
@@ -468,7 +468,7 @@ void Database::releaseData()
     // explicitly delete old group, otherwise it is only deleted when the database object is destructed
     delete oldGroup;
 
-    m_fileWatcher->stop();
+    m_fileWatcher->removeAllPaths();
 
     m_deletedObjects.clear();
     m_commonUsernames.clear();
@@ -611,7 +611,7 @@ void Database::setFilePath(const QString& filePath)
         QString oldPath = m_data.filePath;
         m_data.filePath = filePath;
         // Don't watch for changes until the next open or save operation
-        m_fileWatcher->stop();
+        m_fileWatcher->removeAllPaths();
         emit filePathChanged(oldPath, filePath);
     }
 }

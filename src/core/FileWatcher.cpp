@@ -20,32 +20,37 @@
 #include "core/AsyncTask.h"
 
 #include <QCryptographicHash>
+#include <QtGlobal>
 
 #ifdef Q_OS_LINUX
 #include <sys/vfs.h>
 #endif
 
-FileWatcher::FileWatcher(QObject* parent)
-    : QObject(parent)
+class FileWatcherPrivate : public QObject
 {
-    connect(&m_fileWatcher, SIGNAL(fileChanged(QString)), SLOT(checkFileChanged()));
-    connect(&m_fileChecksumTimer, SIGNAL(timeout()), SLOT(checkFileChanged()));
-    connect(&m_fileChangeDelayTimer, &QTimer::timeout, this, [this] { emit fileChanged(m_filePath); });
-    m_fileChangeDelayTimer.setSingleShot(true);
-    m_fileIgnoreDelayTimer.setSingleShot(true);
-}
+    Q_OBJECT
 
-FileWatcher::~FileWatcher()
-{
-    stop();
-}
+public:
+    explicit FileWatcherPrivate(QObject* parent = nullptr)
+        : QObject(parent)
+    {
+        connect(&m_fileChecksumTimer, SIGNAL(timeout()), SLOT(checkFileChanged()));
+        connect(&m_fileChangeDelayTimer, &QTimer::timeout, this, [this] { emit fileChanged(m_filePath); });
+        m_fileChangeDelayTimer.setSingleShot(true);
+        m_fileIgnoreDelayTimer.setSingleShot(true);
+    }
 
-void FileWatcher::start(const QString& filePath, int checksumIntervalSeconds, int checksumSizeKibibytes)
-{
-    stop();
+    virtual ~FileWatcherPrivate()
+    {
+        stop();
+    }
+
+    void start(const QString& path, int checksumIntervalSeconds = 0, int checksumSizeKibibytes = -1)
+    {
+        stop();
 
 #if defined(Q_OS_LINUX)
-    struct statfs statfsBuf;
+        struct statfs statfsBuf;
     bool forcePolling = false;
     const auto NFS_SUPER_MAGIC = 0x6969;
 
@@ -59,90 +64,171 @@ void FileWatcher::start(const QString& filePath, int checksumIntervalSeconds, in
     m_fileWatcher.setObjectName(objectName);
 #endif
 
-    m_fileWatcher.addPath(filePath);
-    m_filePath = filePath;
+        m_filePath = path;
 
-    // Handle file checksum
-    m_fileChecksumSizeBytes = checksumSizeKibibytes * 1024;
-    m_fileChecksum = calculateChecksum();
-    if (checksumIntervalSeconds > 0) {
-        m_fileChecksumTimer.start(checksumIntervalSeconds * 1000);
+        // Handle file checksum
+        m_fileChecksumSizeBytes = checksumSizeKibibytes * 1024;
+        m_fileChecksum = calculateChecksum();
+        if (checksumIntervalSeconds > 0) {
+            m_fileChecksumTimer.start(checksumIntervalSeconds * 1000);
+        }
+
+        m_ignoreFileChange = false;
     }
 
-    m_ignoreFileChange = false;
+    void stop()
+    {
+        m_filePath.clear();
+        m_fileChecksum.clear();
+        m_fileChecksumTimer.stop();
+        m_fileChangeDelayTimer.stop();
+    }
+
+    bool hasSameFileChecksum()
+    {
+        return calculateChecksum() == m_fileChecksum;
+    }
+
+signals:
+    void fileChanged(const QString& path);
+
+public slots:
+    void pause()
+    {
+        m_ignoreFileChange = true;
+        m_fileChangeDelayTimer.stop();
+    }
+
+    void resume()
+    {
+        m_ignoreFileChange = false;
+        // Add a short delay to start in the next event loop
+        if (!m_fileIgnoreDelayTimer.isActive()) {
+            m_fileIgnoreDelayTimer.start(0);
+        }
+    }
+
+    void checkFileChanged()
+    {
+        if (shouldIgnoreChanges()) {
+            return;
+        }
+
+        // Prevent reentrance
+        m_ignoreFileChange = true;
+
+        AsyncTask::runThenCallback([=] { return calculateChecksum(); },
+                                   this,
+                                   [=](QByteArray checksum) {
+                                       if (checksum != m_fileChecksum) {
+                                           m_fileChecksum = checksum;
+                                           m_fileChangeDelayTimer.start(0);
+                                       }
+
+                                       m_ignoreFileChange = false;
+                                   });
+    }
+
+private:
+    QByteArray calculateChecksum() const
+    {
+        QFile file(m_filePath);
+        if (file.open(QFile::ReadOnly)) {
+            QCryptographicHash hash(QCryptographicHash::Sha256);
+            if (m_fileChecksumSizeBytes > 0) {
+                hash.addData(file.read(m_fileChecksumSizeBytes));
+            } else {
+                hash.addData(&file);
+            }
+            return hash.result();
+        }
+        // If we fail to open the file return the last known checksum, this
+        // prevents unnecessary merge requests on intermittent network shares
+        return m_fileChecksum;
+    }
+
+    bool shouldIgnoreChanges() const
+    {
+        return m_filePath.isEmpty() || m_ignoreFileChange || m_fileIgnoreDelayTimer.isActive()
+            || m_fileChangeDelayTimer.isActive();
+    }
+
+    QString m_filePath;
+    QByteArray m_fileChecksum;
+    QTimer m_fileChangeDelayTimer;
+    QTimer m_fileIgnoreDelayTimer;
+    QTimer m_fileChecksumTimer;
+    int m_fileChecksumSizeBytes = -1;
+    bool m_ignoreFileChange = false;
+};
+
+
+FileWatcher::FileWatcher(QObject* parent)
+    : QObject(parent)
+{
+    connect(&m_fileWatcher, SIGNAL(fileChanged(QString)), SLOT(checkFileChanged(QString)));
 }
 
-void FileWatcher::stop()
+FileWatcher::~FileWatcher()
 {
-    if (!m_filePath.isEmpty()) {
-        m_fileWatcher.removePath(m_filePath);
+    removeAllPaths();
+}
+
+void FileWatcher::addPath(const QString& path, int checksumIntervalSeconds, int checksumSizeKibibytes)
+{
+    if (!m_watches.contains(path)) {
+        m_fileWatcher.addPath(path);
+        auto w = QSharedPointer<FileWatcherPrivate>::create();
+        m_watches.insert(path, w);
+        connect(w.data(), SIGNAL(fileChanged(QString)), SIGNAL(fileChanged(QString)));
     }
-    m_filePath.clear();
-    m_fileChecksum.clear();
-    m_fileChecksumTimer.stop();
-    m_fileChangeDelayTimer.stop();
+    m_watches.value(path)->start(path, checksumIntervalSeconds, checksumSizeKibibytes);
+}
+
+void FileWatcher::removeAllPaths()
+{
+    for (auto& path : m_watches.keys()) {
+        removePath(path);
+    }
+}
+
+void FileWatcher::removePath(const QString& path)
+{
+    if (m_watches.contains(path)) {
+        m_fileWatcher.removePath(path);
+        m_watches.remove(path);
+    }
+}
+
+void FileWatcher::checkFileChanged(const QString& path)
+{
+    auto it = m_watches.find(path);
+    if (it != m_watches.end()) {
+        (*it)->checkFileChanged();
+    }
+}
+
+bool FileWatcher::hasSameFileChecksum(const QString& path)
+{
+    auto it = m_watches.find(path);
+    if (it != m_watches.end()) {
+        return (*it)->hasSameFileChecksum();
+    }
+    return false;
 }
 
 void FileWatcher::pause()
 {
-    m_ignoreFileChange = true;
-    m_fileChangeDelayTimer.stop();
+    for (auto& w : m_watches) {
+        w->pause();
+    }
 }
 
 void FileWatcher::resume()
 {
-    m_ignoreFileChange = false;
-    // Add a short delay to start in the next event loop
-    if (!m_fileIgnoreDelayTimer.isActive()) {
-        m_fileIgnoreDelayTimer.start(0);
+    for (auto& w : m_watches) {
+        w->resume();
     }
 }
 
-bool FileWatcher::shouldIgnoreChanges()
-{
-    return m_filePath.isEmpty() || m_ignoreFileChange || m_fileIgnoreDelayTimer.isActive()
-           || m_fileChangeDelayTimer.isActive();
-}
-
-bool FileWatcher::hasSameFileChecksum()
-{
-    return calculateChecksum() == m_fileChecksum;
-}
-
-void FileWatcher::checkFileChanged()
-{
-    if (shouldIgnoreChanges()) {
-        return;
-    }
-
-    // Prevent reentrance
-    m_ignoreFileChange = true;
-
-    AsyncTask::runThenCallback([=] { return calculateChecksum(); },
-                               this,
-                               [=](QByteArray checksum) {
-                                   if (checksum != m_fileChecksum) {
-                                       m_fileChecksum = checksum;
-                                       m_fileChangeDelayTimer.start(0);
-                                   }
-
-                                   m_ignoreFileChange = false;
-                               });
-}
-
-QByteArray FileWatcher::calculateChecksum()
-{
-    QFile file(m_filePath);
-    if (file.open(QFile::ReadOnly)) {
-        QCryptographicHash hash(QCryptographicHash::Sha256);
-        if (m_fileChecksumSizeBytes > 0) {
-            hash.addData(file.read(m_fileChecksumSizeBytes));
-        } else {
-            hash.addData(&file);
-        }
-        return hash.result();
-    }
-    // If we fail to open the file return the last known checksum, this
-    // prevents unnecessary merge requests on intermittent network shares
-    return m_fileChecksum;
-}
+#include "FileWatcher.moc"

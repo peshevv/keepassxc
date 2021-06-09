@@ -108,7 +108,7 @@ void ShareObserver::reinitialize()
             const auto newResolvedPath = resolvePath(reference.path, m_db);
             auto fileWatcher = QSharedPointer<FileWatcher>::create(this);
             connect(fileWatcher.data(), &FileWatcher::fileChanged, this, &ShareObserver::handleFileUpdated);
-            fileWatcher->start(newResolvedPath, FileWatchPeriod, FileWatchSize);
+            fileWatcher->addPath(newResolvedPath, FileWatchPeriod, FileWatchSize);
             m_fileWatchers.insert(newResolvedPath, fileWatcher);
         }
         if (reference.isExporting()) {
@@ -285,13 +285,13 @@ QList<ShareObserver::Result> ShareObserver::exportShares()
         const QString resolvedPath = resolvePath(reference.config.path, m_db);
         auto watcher = m_fileWatchers.value(resolvedPath);
         if (watcher) {
-            watcher->stop();
+            watcher->removePath(resolvedPath);
         }
 
         results << ShareExport::intoContainer(resolvedPath, reference.config, reference.group);
 
         if (watcher) {
-            watcher->start(resolvedPath, FileWatchPeriod, FileWatchSize);
+            watcher->addPath(resolvedPath, FileWatchPeriod, FileWatchSize);
         }
     }
     return results;

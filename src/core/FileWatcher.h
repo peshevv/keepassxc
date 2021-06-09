@@ -19,7 +19,10 @@
 #define KEEPASSXC_FILEWATCHER_H
 
 #include <QFileSystemWatcher>
-#include <QTimer>
+#include <QHash>
+#include <QSharedPointer>
+
+class FileWatcherPrivate;
 
 class FileWatcher : public QObject
 {
@@ -29,10 +32,11 @@ public:
     explicit FileWatcher(QObject* parent = nullptr);
     ~FileWatcher() override;
 
-    void start(const QString& path, int checksumIntervalSeconds = 0, int checksumSizeKibibytes = -1);
-    void stop();
+    void addPath(const QString& path, int checksumIntervalSeconds = 0, int checksumSizeKibibytes = -1);
+    void removePath(const QString& path);
+    void removeAllPaths();
 
-    bool hasSameFileChecksum();
+    bool hasSameFileChecksum(const QString& path);
 
 signals:
     void fileChanged(const QString& path);
@@ -42,20 +46,11 @@ public slots:
     void resume();
 
 private slots:
-    void checkFileChanged();
+    void checkFileChanged(const QString& path);
 
 private:
-    QByteArray calculateChecksum();
-    bool shouldIgnoreChanges();
-
-    QString m_filePath;
+    QHash<QString, QSharedPointer<FileWatcherPrivate>> m_watches;
     QFileSystemWatcher m_fileWatcher;
-    QByteArray m_fileChecksum;
-    QTimer m_fileChangeDelayTimer;
-    QTimer m_fileIgnoreDelayTimer;
-    QTimer m_fileChecksumTimer;
-    int m_fileChecksumSizeBytes = -1;
-    bool m_ignoreFileChange = false;
 };
 
 #endif // KEEPASSXC_FILEWATCHER_H
