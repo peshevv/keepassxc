@@ -18,11 +18,11 @@
 #ifndef KEEPASSX_ENTRYATTACHMENTS_H
 #define KEEPASSX_ENTRYATTACHMENTS_H
 
+#include "core/FileWatcher.h"
+#include "core/ModifiableObject.h"
+
 #include <QHash>
 #include <QObject>
-#include <QFileSystemWatcher>
-
-#include "core/ModifiableObject.h"
 
 class QStringList;
 
@@ -51,6 +51,7 @@ public:
 
 signals:
     void keyModified(const QString& key);
+    void valueModifiedExternally(const QByteArray& value);
     void aboutToBeAdded(const QString& key);
     void added(const QString& key);
     void aboutToBeRemoved(const QString& key);
@@ -58,10 +59,13 @@ signals:
     void aboutToBeReset();
     void reset();
 
+private slots:
+    void attachmentFileModified(const QString& path);
+
 private:
     QHash<QString, QByteArray> m_attachments;
     QHash<QString, QString> m_openedAttachments;
-    QFileSystemWatcher m_attachmentFileWatcher;
+    FileWatcher m_attachmentFileWatcher;
 };
 
 #endif // KEEPASSX_ENTRYATTACHMENTS_H

@@ -31,6 +31,8 @@
 EntryAttachments::EntryAttachments(QObject* parent)
     : ModifiableObject(parent)
 {
+    connect(&m_attachmentFileWatcher, &FileWatcher::fileChanged,
+            this, &EntryAttachments::attachmentFileModified);
 }
 
 EntryAttachments::~EntryAttachments()
@@ -221,10 +223,10 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
             return false;
         }
 
-        m_openedAttachments.insert(key, tmpFile.fileName());
-        m_attachmentFileWatcher.addPath(tmpFile.fileName());
         tmpFile.close();
         tmpFile.setAutoRemove(false);
+        m_openedAttachments.insert(key, tmpFile.fileName());
+        m_attachmentFileWatcher.addPath(tmpFile.fileName());
     }
 
     const bool openOk = QDesktopServices::openUrl(QUrl::fromLocalFile(m_openedAttachments.value(key)));
@@ -234,4 +236,14 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
     }
 
     return true;
+}
+
+void EntryAttachments::attachmentFileModified(const QString& path)
+{
+    QFile f(path);
+    if (f.open(QFile::ReadOnly)) {
+        auto newContents = f.readAll();
+        f.close();
+        emit valueModifiedExternally(newContents);
+    }
 }
