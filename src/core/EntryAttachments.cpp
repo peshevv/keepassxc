@@ -148,7 +148,7 @@ void EntryAttachments::clear()
     m_attachments.clear();
 
     // Overwrite all open attachment files with random data and then remove them
-    for (auto& path: qAsConst(m_openedAttachments)) {
+    for (auto& path: asConst(m_openedAttachments)) {
         m_attachmentFileWatcher.removePath(path);
 
         QFile f(path);
@@ -162,6 +162,7 @@ void EntryAttachments::clear()
         f.remove();
     }
     m_openedAttachments.clear();
+    m_openedAttachmentsInverse.clear();
 
     emit reset();
     emitModified();
@@ -226,6 +227,7 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
         tmpFile.close();
         tmpFile.setAutoRemove(false);
         m_openedAttachments.insert(key, tmpFile.fileName());
+        m_openedAttachmentsInverse.insert(tmpFile.fileName(), key);
         m_attachmentFileWatcher.addPath(tmpFile.fileName());
     }
 
@@ -240,10 +242,8 @@ bool EntryAttachments::openAttachment(const QString& key, QString* errorMessage)
 
 void EntryAttachments::attachmentFileModified(const QString& path)
 {
-    QFile f(path);
-    if (f.open(QFile::ReadOnly)) {
-        auto newContents = f.readAll();
-        f.close();
-        emit valueModifiedExternally(newContents);
+    auto it = m_openedAttachmentsInverse.find(path);
+    if (it != m_openedAttachmentsInverse.end()) {
+        emit valueModifiedExternally(it.value(), path);
     }
 }

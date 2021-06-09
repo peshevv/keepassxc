@@ -51,7 +51,7 @@ public:
 
 signals:
     void keyModified(const QString& key);
-    void valueModifiedExternally(const QByteArray& value);
+    void valueModifiedExternally(const QString& key, const QString& path);
     void aboutToBeAdded(const QString& key);
     void added(const QString& key);
     void aboutToBeRemoved(const QString& key);
@@ -65,6 +65,7 @@ private slots:
 private:
     QHash<QString, QByteArray> m_attachments;
     QHash<QString, QString> m_openedAttachments;
+    QHash<QString, QString> m_openedAttachmentsInverse;
     FileWatcher m_attachmentFileWatcher;
 };
 
