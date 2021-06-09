@@ -49,21 +49,6 @@ public:
     {
         stop();
 
-#if defined(Q_OS_LINUX)
-        struct statfs statfsBuf;
-    bool forcePolling = false;
-    const auto NFS_SUPER_MAGIC = 0x6969;
-
-    if (!statfs(filePath.toLocal8Bit().constData(), &statfsBuf)) {
-        forcePolling = (statfsBuf.f_type == NFS_SUPER_MAGIC);
-    } else {
-        // if we can't get the fs type let's fall back to polling
-        forcePolling = true;
-    }
-    auto objectName = forcePolling ? QLatin1String("_qt_autotest_force_engine_poller") : QLatin1String("");
-    m_fileWatcher.setObjectName(objectName);
-#endif
-
         m_filePath = path;
 
         // Handle file checksum
@@ -176,11 +161,27 @@ FileWatcher::~FileWatcher()
 
 void FileWatcher::addPath(const QString& path, int checksumIntervalSeconds, int checksumSizeKibibytes)
 {
+#ifdef Q_OS_LINUX
+    struct statfs statfsBuf;
+    bool forcePolling = false;
+    const auto NFS_SUPER_MAGIC = 0x6969;
+
+    if (!statfs(path.toLocal8Bit().constData(), &statfsBuf)) {
+        forcePolling = (statfsBuf.f_type == NFS_SUPER_MAGIC);
+    } else {
+        // if we can't get the fs type let's fall back to polling
+        forcePolling = true;
+    }
+    // TODO: Enable polling only for individual files
+    auto objectName = forcePolling ? QLatin1String("_qt_autotest_force_engine_poller") : QLatin1String("");
+    m_fileWatcher.setObjectName(objectName);
+#endif
+
     if (!m_watches.contains(path)) {
         m_fileWatcher.addPath(path);
         auto w = QSharedPointer<FileWatcherPrivate>::create();
-        m_watches.insert(path, w);
         connect(w.data(), SIGNAL(fileChanged(QString)), SIGNAL(fileChanged(QString)));
+        m_watches.insert(path, w);
     }
     m_watches.value(path)->start(path, checksumIntervalSeconds, checksumSizeKibibytes);
 }
